@@ -58,4 +58,3 @@ docker compose up --build
 
 ## Notes
 - The included dataset is a realistic synthetic telco dataset enriched with network, complaint, and behavioral features.
-- The model is intentionally simple and explainable for interview, assignment, and demo use.
