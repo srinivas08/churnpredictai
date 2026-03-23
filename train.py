@@ -1,83 +1,95 @@
 from pathlib import Path
+
 import joblib
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBClassifier
 
-ROOT = Path(__file__).resolve().parent
-DATA_PATH = ROOT / 'data' / 'final_telco_churn_dataset.csv'
-MODEL_PATH = ROOT / 'models' / 'churn_model.joblib'
-FEATURES_PATH = ROOT / 'models' / 'feature_columns.joblib'
+DATA_PATH = Path("data/final_telco_churn_dataset.csv")
+MODEL_PATH = Path("churn_model.joblib")
+FEATURES_PATH = Path("feature_columns.joblib")
 
-TARGET = 'Churn'
-FEATURES = [
-    'tenure', 'MonthlyCharges', 'TotalCharges', 'Contract', 'InternetService',
-    'PaymentMethod', 'avg_latency_ms', 'signal_strength_dbm', 'packet_loss_rate',
-    'num_complaints', 'avg_resolution_time', 'usage_prev_month', 'usage_last_month',
-    'usage_drop_pct'
-]
-NUMERIC = [
-    'tenure', 'MonthlyCharges', 'TotalCharges', 'avg_latency_ms', 'signal_strength_dbm',
-    'packet_loss_rate', 'num_complaints', 'avg_resolution_time', 'usage_prev_month',
-    'usage_last_month', 'usage_drop_pct'
-]
-CATEGORICAL = ['Contract', 'InternetService', 'PaymentMethod']
+TARGET = "Churn"
+DROP_COLUMNS = ["customerID"]
 
 
 def main():
     df = pd.read_csv(DATA_PATH)
-    X = df[FEATURES]
+
+    df = df.drop(columns=[c for c in DROP_COLUMNS if c in df.columns])
+
+    X = df.drop(columns=[TARGET])
     y = df[TARGET]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
+    numerical_cols = X.select_dtypes(exclude=["object"]).columns.tolist()
+
+    numeric_pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
     )
 
-    numeric_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='median')),
-        ('scaler', StandardScaler())
-    ])
+    categorical_pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("encoder", OneHotEncoder(handle_unknown="ignore")),
+        ]
+    )
 
-    categorical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='most_frequent')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
-    ])
+    preprocessor = ColumnTransformer(
+        [
+            ("num", numeric_pipeline, numerical_cols),
+            ("cat", categorical_pipeline, categorical_cols),
+        ]
+    )
 
-    preprocessor = ColumnTransformer(transformers=[
-        ('num', numeric_transformer, NUMERIC),
-        ('cat', categorical_transformer, CATEGORICAL)
-    ])
+    model = XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric="logloss",
+    )
 
-    model = Pipeline(steps=[
-        ('preprocessor', preprocessor),
-        ('classifier', RandomForestClassifier(
-            n_estimators=250,
-            max_depth=8,
-            min_samples_leaf=3,
-            random_state=42,
-            class_weight='balanced_subsample'
-        ))
-    ])
+    pipeline = Pipeline(
+        [
+            ("preprocessor", preprocessor),
+            ("model", model),
+        ]
+    )
 
-    model.fit(X_train, y_train)
-    preds = model.predict(X_test)
-    probs = model.predict_proba(X_test)[:, 1]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y,
+    )
 
-    auc = roc_auc_score(y_test, probs)
-    print(f'ROC-AUC: {auc:.4f}')
-    print(classification_report(y_test, preds))
+    pipeline.fit(X_train, y_train)
 
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
-    feature_names = model.named_steps['preprocessor'].get_feature_names_out().tolist()
-    joblib.dump(feature_names, FEATURES_PATH)
-    print(f'Model saved to {MODEL_PATH}')
+    y_pred = pipeline.predict(X_test)
+    y_prob = pipeline.predict_proba(X_test)[:, 1]
+
+    print("\nClassification Report:\n")
+    print(classification_report(y_test, y_pred))
+    print("ROC-AUC:", round(roc_auc_score(y_test, y_prob), 4))
+
+    joblib.dump(pipeline, MODEL_PATH)
+    joblib.dump(X.columns.tolist(), FEATURES_PATH)
+
+    print(f"\nSaved model to: {MODEL_PATH}")
+    print(f"Saved feature columns to: {FEATURES_PATH}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
