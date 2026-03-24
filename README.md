@@ -168,4 +168,4 @@ The `Churn` column (0/1) is derived based on:
 
 ## 🏁 Conclusion
 
-Transforms telecom data into **actionable AI insights** to predict churn, explain reasons, and enable proactive retention.
+Transforms wifi data into **actionable AI insights** to predict churn, explain reasons, and enable proactive retention.
