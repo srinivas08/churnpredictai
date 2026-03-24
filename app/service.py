@@ -89,7 +89,6 @@ def get_high_risk_customers():
     scored = df.copy()
 
     features = scored.drop(columns=["Churn", "customerID"], errors="ignore")
-    # Align to trained feature order just in case
     features = features[FEATURE_COLUMNS]
 
     probabilities = pipeline.predict_proba(features)[:, 1]
@@ -198,4 +197,140 @@ def copilot_response(req: CopilotRequest):
 
     return {
         "response": "Main churn drivers are usually complaints, contract type, monthly charges, signal strength, latency, packet loss, and usage drop. Use the prediction panel for customer-specific risk."
+    }
+
+
+def get_dashboard_analytics():
+    analytics_df = df.copy()
+    analytics_df["Churn"] = analytics_df["Churn"].astype(int)
+
+    churned = int((analytics_df["Churn"] == 1).sum())
+    retained = int((analytics_df["Churn"] == 0).sum())
+
+    churn_distribution = {
+        "churned": churned,
+        "retained": retained,
+    }
+
+    contract_group = (
+        analytics_df.groupby(["Contract", "Churn"])
+        .size()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+
+    contract_order = ["Month-to-month", "One year", "Two year"]
+    contract_group_map = {
+        row["Contract"]: {
+            "contract": row["Contract"],
+            "churned": int(row.get(1, 0)),
+            "retained": int(row.get(0, 0)),
+        }
+        for _, row in contract_group.iterrows()
+    }
+
+    churn_by_contract = [
+        contract_group_map[c] for c in contract_order if c in contract_group_map
+    ]
+
+    service_group = (
+        analytics_df.groupby(["InternetService", "Churn"])
+        .size()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+
+    service_order = ["Fiber optic", "DSL", "No"]
+    service_group_map = {
+        row["InternetService"]: {
+            "service": row["InternetService"],
+            "churned": int(row.get(1, 0)),
+            "retained": int(row.get(0, 0)),
+        }
+        for _, row in service_group.iterrows()
+    }
+
+    churn_by_internet_service = [
+        service_group_map[s] for s in service_order if s in service_group_map
+    ]
+
+    tenure_bins = [0, 6, 12, 24, 48, 72]
+    tenure_labels = ["0–6 mo", "7–12 mo", "13–24 mo", "25–48 mo", "49–72 mo"]
+
+    analytics_df["tenure_bucket"] = pd.cut(
+        analytics_df["tenure"],
+        bins=tenure_bins,
+        labels=tenure_labels,
+        include_lowest=True,
+        right=True,
+    )
+
+    tenure_group = (
+        analytics_df.groupby("tenure_bucket", observed=False)["Churn"]
+        .mean()
+        .reset_index()
+    )
+
+    tenure_vs_churn = []
+    for _, row in tenure_group.iterrows():
+        tenure_vs_churn.append(
+            {
+                "tenure_bucket": str(row["tenure_bucket"]),
+                "churn_rate": round(float(row["Churn"]), 3)
+                if pd.notna(row["Churn"])
+                else 0.0,
+            }
+        )
+
+    charge_bins = [20, 40, 60, 80, 100, 120]
+    charge_labels = ["$20–40", "$40–60", "$60–80", "$80–100", "$100–120"]
+
+    analytics_df["charge_bucket"] = pd.cut(
+        analytics_df["MonthlyCharges"],
+        bins=charge_bins,
+        labels=charge_labels,
+        include_lowest=True,
+        right=True,
+    )
+
+    charges_group = (
+        analytics_df.groupby("charge_bucket", observed=False)["Churn"]
+        .mean()
+        .reset_index()
+    )
+
+    charges_vs_churn = []
+    for _, row in charges_group.iterrows():
+        charges_vs_churn.append(
+            {
+                "charge_bucket": str(row["charge_bucket"]),
+                "churn_rate": round(float(row["Churn"]), 3)
+                if pd.notna(row["Churn"])
+                else 0.0,
+            }
+        )
+
+    complaints_group = (
+        analytics_df.groupby("num_complaints")["Churn"]
+        .mean()
+        .reset_index()
+        .sort_values("num_complaints")
+    )
+
+    complaints_vs_churn = []
+    for _, row in complaints_group.iterrows():
+        complaints_vs_churn.append(
+            {
+                "num_complaints": int(row["num_complaints"]),
+                "churn_rate": round(float(row["Churn"]), 3),
+            }
+        )
+
+    return {
+        "churn_distribution": churn_distribution,
+        "churn_by_contract": churn_by_contract,
+        "churn_by_internet_service": churn_by_internet_service,
+        "tenure_vs_churn": tenure_vs_churn,
+        "charges_vs_churn": charges_vs_churn,
+        "complaints_vs_churn": complaints_vs_churn,
     }

@@ -4,6 +4,7 @@ from app.schemas import CopilotRequest, PredictRequest
 from app.service import (
     copilot_response,
     get_customer,
+    get_dashboard_analytics,
     get_high_risk_customers,
     get_kpis,
     predict_churn,
@@ -12,15 +13,23 @@ from app.service import (
 app = FastAPI(title="ChurnIQ API", version="1.0.0")
 
 
-# 🔹 Health Check (IMPORTANT)
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "churniq-api", "model_loaded": True}
+    return {
+        "status": "ok",
+        "service": "churniq-api",
+        "model_loaded": True,
+    }
 
 
 @app.get("/dashboard/kpis")
 def dashboard_kpis():
     return get_kpis()
+
+
+@app.get("/dashboard/analytics")
+def dashboard_analytics():
+    return get_dashboard_analytics()
 
 
 @app.get("/customers/high-risk")
