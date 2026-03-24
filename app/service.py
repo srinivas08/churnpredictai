@@ -64,6 +64,14 @@ def _recommended_action(drivers: list[str]) -> str:
 def get_kpis():
     churn_mask = df["Churn"] == 1
 
+    features = df.drop(columns=["Churn", "customerID"], errors="ignore")
+    features = features[FEATURE_COLUMNS]
+    probabilities = pipeline.predict_proba(features)[:, 1]
+
+    high_risk_count = int((probabilities >= 0.7).sum())
+    medium_risk_count = int(((probabilities >= 0.4) & (probabilities < 0.7)).sum())
+    low_risk_count = int((probabilities < 0.4).sum())
+
     return {
         "total_customers": int(len(df)),
         "churn_rate": round(float(df["Churn"].mean()), 4),
@@ -71,6 +79,9 @@ def get_kpis():
         "avg_monthly_charges": round(float(df["MonthlyCharges"].mean()), 2),
         "avg_tenure": round(float(df["tenure"].mean()), 2),
         "avg_latency": round(float(df["avg_latency_ms"].mean()), 2),
+        "high_risk_customers": high_risk_count,
+        "medium_risk_customers": medium_risk_count,
+        "low_risk_customers": low_risk_count,
     }
 
 
