@@ -12,6 +12,12 @@ from app.service import (
 app = FastAPI(title="ChurnIQ API", version="1.0.0")
 
 
+# 🔹 Health Check (IMPORTANT)
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "churniq-api", "model_loaded": True}
+
+
 @app.get("/dashboard/kpis")
 def dashboard_kpis():
     return get_kpis()
