@@ -11,8 +11,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
 
 DATA_PATH = Path("data/final_telco_churn_dataset.csv")
-MODEL_PATH = Path("churn_model.joblib")
-FEATURES_PATH = Path("feature_columns.joblib")
+MODEL_PATH = Path("models/churn_model.joblib")
+FEATURES_PATH = Path("models/feature_columns.joblib")
 
 TARGET = "Churn"
 DROP_COLUMNS = ["customerID"]
